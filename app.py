@@ -4,18 +4,18 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
-from sklearn.metrics import confusion_matrix, roc_auc_score, ConfusionMatrixDisplay, RocCurveDisplay
+from sklearn.metrics import ConfusionMatrixDisplay, RocCurveDisplay
 from imblearn.over_sampling import SMOTE
 import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Credit Risk Analysis", layout="wide")
-st.title("Credit Risk Analysis: Real-time & Batch Prediction with Visualizations")
+st.title("Credit Risk Analysis & Prediction App")
+st.write("Upload your data, train models, and predict credit risk with full visualizations.")
 
-# ------- Sidebar: Upload main data --------
-st.sidebar.header("Step 1: Upload Training Data")
-main_file = st.sidebar.file_uploader("Upload `cs-training.csv` (required for model training)", type=["csv"])
+# --- Sidebar: Only for training data ---
+st.sidebar.header("1. Upload Training Data")
+main_file = st.sidebar.file_uploader("Upload cs-training.csv", type=["csv"])
 
-# ------- Preprocessing Function ---------
 def preprocess(df):
     df['MonthlyIncome'].replace(0, np.nan, inplace=True)
     df['MonthlyIncome'].fillna(df['MonthlyIncome'].median(), inplace=True)
@@ -26,10 +26,9 @@ def preprocess(df):
     X['LatePaymentFlag'] = (X['NumberOfTime30-59DaysPastDueNotWorse'] > 0).astype(int)
     return X, y
 
-# ------- Train Models If Data Uploaded -------
 if main_file is not None:
     df = pd.read_csv(main_file, index_col=0)
-    st.write("#### Preview of Training Data", df.head())
+    st.write("### Sample Data", df.head())
     X, y = preprocess(df)
     sm = SMOTE(random_state=42)
     X_res, y_res = sm.fit_resample(X, y)
@@ -40,12 +39,12 @@ if main_file is not None:
     xgb.fit(X_train, y_train)
     feature_list = X_train.columns
 
-    # ------ TABS ------
+    # Tabs for interaction
     tab1, tab2 = st.tabs(["Single (Manual) Prediction", "Batch File Prediction"])
 
-    # ------- TAB 1: MANUAL (REAL-TIME) ---------
+    # ---- TAB 1: MANUAL (REAL-TIME) ----
     with tab1:
-        st.header("Single Customer Prediction (with Real-Time Visualizations)")
+        st.header("Single Customer Prediction")
         with st.form("manual_form"):
             cols = st.columns(2)
             RevolvingUtilizationOfUnsecuredLines = cols[0].slider("Revolving Utilization of Unsecured Lines", 0.0, 10.0, 0.5)
@@ -61,8 +60,7 @@ if main_file is not None:
             submit = st.form_submit_button("Predict")
 
         if submit:
-            manual_input = pd.DataFrame([[
-                RevolvingUtilizationOfUnsecuredLines, age, NumberOfTime30_59DaysPastDueNotWorse,
+            manual_input = pd.DataFrame([[RevolvingUtilizationOfUnsecuredLines, age, NumberOfTime30_59DaysPastDueNotWorse,
                 DebtRatio, MonthlyIncome, NumberOfOpenCreditLinesAndLoans, NumberOfTimes90DaysLate,
                 NumberRealEstateLoansOrLines, NumberOfTime60_89DaysPastDueNotWorse, NumberOfDependents
             ]], columns=[
@@ -81,7 +79,6 @@ if main_file is not None:
             st.write(f"**High Risk (RF > 50%)?** {'Yes' if risk_rf > 0.5 else 'No'}")
             st.write(f"**High Risk (XGB > 50%)?** {'Yes' if risk_xgb > 0.5 else 'No'}")
 
-        # --- Visualizations ---
         st.divider()
         st.write("### Model Visualizations (Based on Test Data)")
 
@@ -109,7 +106,6 @@ if main_file is not None:
             RocCurveDisplay.from_estimator(xgb, X_test, y_test, ax=ax)
             st.pyplot(fig)
 
-        # Feature Importances
         st.write("### Feature Importances")
         col7, col8 = st.columns(2)
         with col7:
@@ -133,11 +129,9 @@ if main_file is not None:
             plt.tight_layout()
             st.pyplot(fig)
 
-    # ------- TAB 2: BATCH FILE UPLOAD (PREDICTION) -----------
+    # ---- TAB 2: Batch File Prediction ----
     with tab2:
         st.header("Batch File Prediction")
-        # Sample download
-        st.markdown("Need a template? [Download sample input CSV](sandbox:/sample_input.csv)")
         batch_file = st.file_uploader("Upload customer CSV for batch prediction", type=["csv"], key="batch")
         if batch_file is not None:
             test_df = pd.read_csv(batch_file)
@@ -156,7 +150,6 @@ if main_file is not None:
             csv = test_df.to_csv(index=False).encode()
             st.download_button("Download Results CSV", csv, "batch_predictions.csv", "text/csv")
 
-            # --- Batch-level Visualizations (on predictions) ---
             st.write("### Batch Prediction High Risk Distribution")
             fig, ax = plt.subplots()
             test_df['RF_HighRisk'].value_counts().plot(kind='bar', ax=ax, color=['green', 'red'])
@@ -167,7 +160,8 @@ if main_file is not None:
             test_df['XGB_HighRisk'].value_counts().plot(kind='bar', ax=ax, color=['green', 'red'])
             plt.title("High Risk Customers (XGBoost)")
             st.pyplot(fig)
-        # Optional: show template download button
+
+        # Only show template download in batch tab
         sample_df = pd.DataFrame([{
             'RevolvingUtilizationOfUnsecuredLines': 0.5, 'age': 35, 'NumberOfTime30-59DaysPastDueNotWorse': 0,
             'DebtRatio': 5, 'MonthlyIncome': 5000, 'NumberOfOpenCreditLinesAndLoans': 2,
@@ -176,4 +170,4 @@ if main_file is not None:
         }])
         st.download_button("Download Sample Input CSV", sample_df.to_csv(index=False), "sample_input.csv")
 else:
-    st.info("**Please upload the main `cs-training.csv` dataset in the sidebar to use this app.**")
+    st.info("Please upload the main `cs-training.csv` dataset in the sidebar to use this app.")
