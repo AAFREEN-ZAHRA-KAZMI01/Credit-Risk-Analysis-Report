@@ -9,15 +9,13 @@ from imblearn.over_sampling import SMOTE
 import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Credit Risk Analysis", layout="wide")
+st.title("Credit Risk Analysis: Real-time & Batch Prediction with Visualizations")
 
-st.title("Credit Risk Analysis & Prediction App")
-st.write("Upload your data, train models, and predict credit risk with full visualizations.")
+# ------- Sidebar: Upload main data --------
+st.sidebar.header("Step 1: Upload Training Data")
+main_file = st.sidebar.file_uploader("Upload `cs-training.csv` (required for model training)", type=["csv"])
 
-# Sidebar: File uploader
-st.sidebar.header("1. Upload Data")
-data_file = st.sidebar.file_uploader("Upload cs-training.csv", type=["csv"])
-
-# Helper function for preprocessing
+# ------- Preprocessing Function ---------
 def preprocess(df):
     df['MonthlyIncome'].replace(0, np.nan, inplace=True)
     df['MonthlyIncome'].fillna(df['MonthlyIncome'].median(), inplace=True)
@@ -28,41 +26,41 @@ def preprocess(df):
     X['LatePaymentFlag'] = (X['NumberOfTime30-59DaysPastDueNotWorse'] > 0).astype(int)
     return X, y
 
-# Main logic
-if data_file is not None:
-    df = pd.read_csv(data_file, index_col=0)
-    st.write("### Sample Data", df.head())
+# ------- Train Models If Data Uploaded -------
+if main_file is not None:
+    df = pd.read_csv(main_file, index_col=0)
+    st.write("#### Preview of Training Data", df.head())
     X, y = preprocess(df)
-
-    # Balance data
     sm = SMOTE(random_state=42)
     X_res, y_res = sm.fit_resample(X, y)
-
-    # Train/test split
     X_train, X_test, y_train, y_test = train_test_split(X_res, y_res, test_size=0.2, random_state=42)
-
-    # Train models
     rf = RandomForestClassifier(n_estimators=100, random_state=42)
     xgb = XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42)
     rf.fit(X_train, y_train)
     xgb.fit(X_train, y_train)
+    feature_list = X_train.columns
 
-    st.sidebar.header("2. Single Customer Prediction")
-    with st.sidebar.form(key="predict_form"):
-        RevolvingUtilizationOfUnsecuredLines = st.slider("Revolving Utilization of Unsecured Lines", 0.0, 10.0, 0.5)
-        age = st.slider("Age", 18, 100, 35)
-        NumberOfTime30_59DaysPastDueNotWorse = st.slider("Times 30-59 Days Past Due", 0, 20, 0)
-        DebtRatio = st.slider("Debt Ratio", 0.0, 100.0, 5.0)
-        MonthlyIncome = st.slider("Monthly Income", 0.0, 50000.0, 5000.0, step=100.0)
-        NumberOfOpenCreditLinesAndLoans = st.slider("Open Credit Lines and Loans", 0, 30, 2)
-        NumberOfTimes90DaysLate = st.slider("Times 90 Days Late", 0, 20, 0)
-        NumberRealEstateLoansOrLines = st.slider("Real Estate Loans or Lines", 0, 10, 1)
-        NumberOfTime60_89DaysPastDueNotWorse = st.slider("Times 60-89 Days Past Due", 0, 20, 0)
-        NumberOfDependents = st.slider("Number of Dependents", 0, 10, 0)
-        submit = st.form_submit_button("Predict Risk")
+    # ------ TABS ------
+    tab1, tab2 = st.tabs(["Single (Manual) Prediction", "Batch File Prediction"])
 
-    if submit:
-        input_df = pd.DataFrame([[
+    # ------- TAB 1: MANUAL (REAL-TIME) ---------
+    with tab1:
+        st.header("Single Customer Prediction (with Real-Time Visualizations)")
+        # Inputs
+        cols = st.columns(2)
+        RevolvingUtilizationOfUnsecuredLines = cols[0].slider("Revolving Utilization of Unsecured Lines", 0.0, 10.0, 0.5)
+        age = cols[1].slider("Age", 18, 100, 35)
+        NumberOfTime30_59DaysPastDueNotWorse = cols[0].slider("Times 30-59 Days Past Due", 0, 20, 0)
+        DebtRatio = cols[1].slider("Debt Ratio", 0.0, 100.0, 5.0)
+        MonthlyIncome = cols[0].slider("Monthly Income", 0.0, 50000.0, 5000.0, step=100.0)
+        NumberOfOpenCreditLinesAndLoans = cols[1].slider("Open Credit Lines and Loans", 0, 30, 2)
+        NumberOfTimes90DaysLate = cols[0].slider("Times 90 Days Late", 0, 20, 0)
+        NumberRealEstateLoansOrLines = cols[1].slider("Real Estate Loans or Lines", 0, 10, 1)
+        NumberOfTime60_89DaysPastDueNotWorse = cols[0].slider("Times 60-89 Days Past Due", 0, 20, 0)
+        NumberOfDependents = cols[1].slider("Number of Dependents", 0, 10, 0)
+
+        # Predict on form input
+        manual_input = pd.DataFrame([[
             RevolvingUtilizationOfUnsecuredLines, age, NumberOfTime30_59DaysPastDueNotWorse,
             DebtRatio, MonthlyIncome, NumberOfOpenCreditLinesAndLoans, NumberOfTimes90DaysLate,
             NumberRealEstateLoansOrLines, NumberOfTime60_89DaysPastDueNotWorse, NumberOfDependents
@@ -71,81 +69,106 @@ if data_file is not None:
             'MonthlyIncome', 'NumberOfOpenCreditLinesAndLoans', 'NumberOfTimes90DaysLate',
             'NumberRealEstateLoansOrLines', 'NumberOfTime60-89DaysPastDueNotWorse', 'NumberOfDependents'
         ])
-        input_df['DebtToIncomeRatio'] = input_df['DebtRatio'] / (input_df['MonthlyIncome'] + 1)
-        input_df['LatePaymentFlag'] = (input_df['NumberOfTime30-59DaysPastDueNotWorse'] > 0).astype(int)
-        risk_prob_rf = rf.predict_proba(input_df)[0][1]
-        risk_prob_xgb = xgb.predict_proba(input_df)[0][1]
-        st.sidebar.markdown(f"**Random Forest Default Probability:** `{risk_prob_rf:.2%}`")
-        st.sidebar.markdown(f"**XGBoost Default Probability:** `{risk_prob_xgb:.2%}`")
-        st.sidebar.markdown(f"**High Risk (RF > 50%)?** {'Yes' if risk_prob_rf > 0.5 else 'No'}")
-        st.sidebar.markdown(f"**High Risk (XGB > 50%)?** {'Yes' if risk_prob_xgb > 0.5 else 'No'}")
+        manual_input['DebtToIncomeRatio'] = manual_input['DebtRatio'] / (manual_input['MonthlyIncome'] + 1)
+        manual_input['LatePaymentFlag'] = (manual_input['NumberOfTime30-59DaysPastDueNotWorse'] > 0).astype(int)
 
-    st.header("3. Model Results and Visualizations")
+        risk_rf = rf.predict_proba(manual_input)[0][1]
+        risk_xgb = xgb.predict_proba(manual_input)[0][1]
 
-    # 1. Confusion Matrix
-    y_pred_rf = rf.predict(X_test)
-    y_pred_xgb = xgb.predict(X_test)
+        st.subheader("Results")
+        st.write(f"**Random Forest Default Probability:** `{risk_rf:.2%}`")
+        st.write(f"**XGBoost Default Probability:** `{risk_xgb:.2%}`")
+        st.write(f"**High Risk (RF > 50%)?** {'Yes' if risk_rf > 0.5 else 'No'}")
+        st.write(f"**High Risk (XGB > 50%)?** {'Yes' if risk_xgb > 0.5 else 'No'}")
 
-    st.subheader("Confusion Matrix: Random Forest")
-    fig, ax = plt.subplots()
-    ConfusionMatrixDisplay.from_predictions(y_test, y_pred_rf, ax=ax)
-    st.pyplot(fig)
+        # --- Show Visualizations on whole test set (as in a real dashboard) ---
+        st.divider()
+        st.write("### Model Visualizations (Based on Test Data)")
 
-    st.subheader("Confusion Matrix: XGBoost")
-    fig, ax = plt.subplots()
-    ConfusionMatrixDisplay.from_predictions(y_test, y_pred_xgb, ax=ax)
-    st.pyplot(fig)
+        col3, col4 = st.columns(2)
+        # Confusion Matrix RF
+        with col3:
+            st.write("**Confusion Matrix: Random Forest**")
+            fig, ax = plt.subplots()
+            ConfusionMatrixDisplay.from_predictions(y_test, rf.predict(X_test), ax=ax)
+            st.pyplot(fig)
+        # ROC Curve RF
+        with col4:
+            st.write("**ROC Curve: Random Forest**")
+            fig, ax = plt.subplots()
+            RocCurveDisplay.from_estimator(rf, X_test, y_test, ax=ax)
+            st.pyplot(fig)
 
-    # 2. ROC Curve
-    st.subheader("ROC Curve: Random Forest")
-    fig, ax = plt.subplots()
-    RocCurveDisplay.from_estimator(rf, X_test, y_test, ax=ax)
-    st.pyplot(fig)
+        col5, col6 = st.columns(2)
+        # Confusion Matrix XGB
+        with col5:
+            st.write("**Confusion Matrix: XGBoost**")
+            fig, ax = plt.subplots()
+            ConfusionMatrixDisplay.from_predictions(y_test, xgb.predict(X_test), ax=ax)
+            st.pyplot(fig)
+        # ROC Curve XGB
+        with col6:
+            st.write("**ROC Curve: XGBoost**")
+            fig, ax = plt.subplots()
+            RocCurveDisplay.from_estimator(xgb, X_test, y_test, ax=ax)
+            st.pyplot(fig)
 
-    st.subheader("ROC Curve: XGBoost")
-    fig, ax = plt.subplots()
-    RocCurveDisplay.from_estimator(xgb, X_test, y_test, ax=ax)
-    st.pyplot(fig)
+        # Feature Importance
+        st.write("### Feature Importances")
+        col7, col8 = st.columns(2)
+        with col7:
+            st.write("**Random Forest**")
+            importances_rf = rf.feature_importances_
+            indices_rf = np.argsort(importances_rf)[::-1]
+            fig, ax = plt.subplots(figsize=(7, 3))
+            ax.bar(range(10), importances_rf[indices_rf][:10])
+            ax.set_xticks(range(10))
+            ax.set_xticklabels(feature_list[indices_rf][:10], rotation=45, ha='right')
+            plt.tight_layout()
+            st.pyplot(fig)
+        with col8:
+            st.write("**XGBoost**")
+            importances_xgb = xgb.feature_importances_
+            indices_xgb = np.argsort(importances_xgb)[::-1]
+            fig, ax = plt.subplots(figsize=(7, 3))
+            ax.bar(range(10), importances_xgb[indices_xgb][:10])
+            ax.set_xticks(range(10))
+            ax.set_xticklabels(feature_list[indices_xgb][:10], rotation=45, ha='right')
+            plt.tight_layout()
+            st.pyplot(fig)
 
-    # 3. Feature Importance
-    st.subheader("Feature Importance: Random Forest")
-    importances = rf.feature_importances_
-    features = X_train.columns
-    indices = np.argsort(importances)[::-1]
-    fig, ax = plt.subplots(figsize=(8, 4))
-    ax.bar(range(10), importances[indices][:10])
-    ax.set_xticks(range(10))
-    ax.set_xticklabels(features[indices][:10], rotation=45, ha='right')
-    plt.tight_layout()
-    st.pyplot(fig)
+    # ------- TAB 2: BATCH FILE UPLOAD (PREDICTION) -----------
+    with tab2:
+        st.header("Batch File Prediction")
+        batch_file = st.file_uploader("Upload customer CSV for batch prediction", type=["csv"], key="batch")
+        if batch_file is not None:
+            test_df = pd.read_csv(batch_file)
+            # Preprocess input
+            if 'SeriousDlqin2yrs' in test_df.columns:
+                test_df = test_df.drop(columns=['SeriousDlqin2yrs'])
+            test_df['DebtToIncomeRatio'] = test_df['DebtRatio'] / (test_df['MonthlyIncome'] + 1)
+            test_df['LatePaymentFlag'] = (test_df['NumberOfTime30-59DaysPastDueNotWorse'] > 0).astype(int)
+            X_pred = test_df[X_train.columns]
+            test_df["RF_Default_Prob"] = rf.predict_proba(X_pred)[:,1]
+            test_df["XGB_Default_Prob"] = xgb.predict_proba(X_pred)[:,1]
+            test_df["RF_HighRisk"] = np.where(test_df["RF_Default_Prob"] > 0.5, "Yes", "No")
+            test_df["XGB_HighRisk"] = np.where(test_df["XGB_Default_Prob"] > 0.5, "Yes", "No")
+            st.write("#### Prediction Results (First 10 Rows)", test_df.head(10))
 
-    st.subheader("Feature Importance: XGBoost")
-    importances = xgb.feature_importances_
-    indices = np.argsort(importances)[::-1]
-    fig, ax = plt.subplots(figsize=(8, 4))
-    ax.bar(range(10), importances[indices][:10])
-    ax.set_xticks(range(10))
-    ax.set_xticklabels(features[indices][:10], rotation=45, ha='right')
-    plt.tight_layout()
-    st.pyplot(fig)
+            # Download
+            csv = test_df.to_csv(index=False).encode()
+            st.download_button("Download Results CSV", csv, "batch_predictions.csv", "text/csv")
 
-    # 4. Batch Prediction (optional for user-uploaded file)
-    st.header("4. Batch Prediction")
-    st.write("Upload a file (CSV) of customers to get batch risk predictions:")
+            # --- Batch-level Visualizations (on predictions) ---
+            st.write("### Batch Prediction High Risk Distribution")
+            fig, ax = plt.subplots()
+            test_df['RF_HighRisk'].value_counts().plot(kind='bar', ax=ax, color=['green', 'red'])
+            plt.title("High Risk Customers (Random Forest)")
+            st.pyplot(fig)
 
-    pred_file = st.file_uploader("Upload customers file for batch scoring", type=["csv"], key="batch")
-    if pred_file is not None:
-        test_df = pd.read_csv(pred_file)
-        test_df['DebtToIncomeRatio'] = test_df['DebtRatio'] / (test_df['MonthlyIncome'] + 1)
-        test_df['LatePaymentFlag'] = (test_df['NumberOfTime30-59DaysPastDueNotWorse'] > 0).astype(int)
-        # Must match the features used during training
-        X_pred = test_df[X_train.columns]
-        test_df["RF_Default_Prob"] = rf.predict_proba(X_pred)[:,1]
-        test_df["XGB_Default_Prob"] = xgb.predict_proba(X_pred)[:,1]
-        test_df["RF_HighRisk"] = np.where(test_df["RF_Default_Prob"] > 0.5, "Yes", "No")
-        test_df["XGB_HighRisk"] = np.where(test_df["XGB_Default_Prob"] > 0.5, "Yes", "No")
-        st.write(test_df.head())
-        csv = test_df.to_csv(index=False).encode()
-        st.download_button("Download Results CSV", csv, "predictions.csv", "text/csv")
+            fig, ax = plt.subplots()
+            test_df['XGB_HighRisk'].value_counts().plot(kind='bar', ax=ax, color=['green', 'red'])
+            plt.title("High Risk Customers (XGBoost)")
+            st.pyplot(fig)
 else:
-    st.info("Please upload the cs-training.csv dataset first (sidebar) to get started.")
+    st.info("**Please upload the main `cs-training.csv` dataset in the sidebar to use this app.**")
