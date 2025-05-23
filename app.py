@@ -46,53 +46,51 @@ if main_file is not None:
     # ------- TAB 1: MANUAL (REAL-TIME) ---------
     with tab1:
         st.header("Single Customer Prediction (with Real-Time Visualizations)")
-        # Inputs
-        cols = st.columns(2)
-        RevolvingUtilizationOfUnsecuredLines = cols[0].slider("Revolving Utilization of Unsecured Lines", 0.0, 10.0, 0.5)
-        age = cols[1].slider("Age", 18, 100, 35)
-        NumberOfTime30_59DaysPastDueNotWorse = cols[0].slider("Times 30-59 Days Past Due", 0, 20, 0)
-        DebtRatio = cols[1].slider("Debt Ratio", 0.0, 100.0, 5.0)
-        MonthlyIncome = cols[0].slider("Monthly Income", 0.0, 50000.0, 5000.0, step=100.0)
-        NumberOfOpenCreditLinesAndLoans = cols[1].slider("Open Credit Lines and Loans", 0, 30, 2)
-        NumberOfTimes90DaysLate = cols[0].slider("Times 90 Days Late", 0, 20, 0)
-        NumberRealEstateLoansOrLines = cols[1].slider("Real Estate Loans or Lines", 0, 10, 1)
-        NumberOfTime60_89DaysPastDueNotWorse = cols[0].slider("Times 60-89 Days Past Due", 0, 20, 0)
-        NumberOfDependents = cols[1].slider("Number of Dependents", 0, 10, 0)
+        with st.form("manual_form"):
+            cols = st.columns(2)
+            RevolvingUtilizationOfUnsecuredLines = cols[0].slider("Revolving Utilization of Unsecured Lines", 0.0, 10.0, 0.5)
+            age = cols[1].slider("Age", 18, 100, 35)
+            NumberOfTime30_59DaysPastDueNotWorse = cols[0].slider("Times 30-59 Days Past Due", 0, 20, 0)
+            DebtRatio = cols[1].slider("Debt Ratio", 0.0, 100.0, 5.0)
+            MonthlyIncome = cols[0].slider("Monthly Income", 0.0, 50000.0, 5000.0, step=100.0)
+            NumberOfOpenCreditLinesAndLoans = cols[1].slider("Open Credit Lines and Loans", 0, 30, 2)
+            NumberOfTimes90DaysLate = cols[0].slider("Times 90 Days Late", 0, 20, 0)
+            NumberRealEstateLoansOrLines = cols[1].slider("Real Estate Loans or Lines", 0, 10, 1)
+            NumberOfTime60_89DaysPastDueNotWorse = cols[0].slider("Times 60-89 Days Past Due", 0, 20, 0)
+            NumberOfDependents = cols[1].slider("Number of Dependents", 0, 10, 0)
+            submit = st.form_submit_button("Predict")
 
-        # Predict on form input
-        manual_input = pd.DataFrame([[
-            RevolvingUtilizationOfUnsecuredLines, age, NumberOfTime30_59DaysPastDueNotWorse,
-            DebtRatio, MonthlyIncome, NumberOfOpenCreditLinesAndLoans, NumberOfTimes90DaysLate,
-            NumberRealEstateLoansOrLines, NumberOfTime60_89DaysPastDueNotWorse, NumberOfDependents
-        ]], columns=[
-            'RevolvingUtilizationOfUnsecuredLines', 'age', 'NumberOfTime30-59DaysPastDueNotWorse', 'DebtRatio',
-            'MonthlyIncome', 'NumberOfOpenCreditLinesAndLoans', 'NumberOfTimes90DaysLate',
-            'NumberRealEstateLoansOrLines', 'NumberOfTime60-89DaysPastDueNotWorse', 'NumberOfDependents'
-        ])
-        manual_input['DebtToIncomeRatio'] = manual_input['DebtRatio'] / (manual_input['MonthlyIncome'] + 1)
-        manual_input['LatePaymentFlag'] = (manual_input['NumberOfTime30-59DaysPastDueNotWorse'] > 0).astype(int)
+        if submit:
+            manual_input = pd.DataFrame([[
+                RevolvingUtilizationOfUnsecuredLines, age, NumberOfTime30_59DaysPastDueNotWorse,
+                DebtRatio, MonthlyIncome, NumberOfOpenCreditLinesAndLoans, NumberOfTimes90DaysLate,
+                NumberRealEstateLoansOrLines, NumberOfTime60_89DaysPastDueNotWorse, NumberOfDependents
+            ]], columns=[
+                'RevolvingUtilizationOfUnsecuredLines', 'age', 'NumberOfTime30-59DaysPastDueNotWorse', 'DebtRatio',
+                'MonthlyIncome', 'NumberOfOpenCreditLinesAndLoans', 'NumberOfTimes90DaysLate',
+                'NumberRealEstateLoansOrLines', 'NumberOfTime60-89DaysPastDueNotWorse', 'NumberOfDependents'
+            ])
+            manual_input['DebtToIncomeRatio'] = manual_input['DebtRatio'] / (manual_input['MonthlyIncome'] + 1)
+            manual_input['LatePaymentFlag'] = (manual_input['NumberOfTime30-59DaysPastDueNotWorse'] > 0).astype(int)
+            risk_rf = rf.predict_proba(manual_input)[0][1]
+            risk_xgb = xgb.predict_proba(manual_input)[0][1]
 
-        risk_rf = rf.predict_proba(manual_input)[0][1]
-        risk_xgb = xgb.predict_proba(manual_input)[0][1]
+            st.subheader("Results")
+            st.write(f"**Random Forest Default Probability:** `{risk_rf:.2%}`")
+            st.write(f"**XGBoost Default Probability:** `{risk_xgb:.2%}`")
+            st.write(f"**High Risk (RF > 50%)?** {'Yes' if risk_rf > 0.5 else 'No'}")
+            st.write(f"**High Risk (XGB > 50%)?** {'Yes' if risk_xgb > 0.5 else 'No'}")
 
-        st.subheader("Results")
-        st.write(f"**Random Forest Default Probability:** `{risk_rf:.2%}`")
-        st.write(f"**XGBoost Default Probability:** `{risk_xgb:.2%}`")
-        st.write(f"**High Risk (RF > 50%)?** {'Yes' if risk_rf > 0.5 else 'No'}")
-        st.write(f"**High Risk (XGB > 50%)?** {'Yes' if risk_xgb > 0.5 else 'No'}")
-
-        # --- Show Visualizations on whole test set (as in a real dashboard) ---
+        # --- Visualizations ---
         st.divider()
         st.write("### Model Visualizations (Based on Test Data)")
 
         col3, col4 = st.columns(2)
-        # Confusion Matrix RF
         with col3:
             st.write("**Confusion Matrix: Random Forest**")
             fig, ax = plt.subplots()
             ConfusionMatrixDisplay.from_predictions(y_test, rf.predict(X_test), ax=ax)
             st.pyplot(fig)
-        # ROC Curve RF
         with col4:
             st.write("**ROC Curve: Random Forest**")
             fig, ax = plt.subplots()
@@ -100,20 +98,18 @@ if main_file is not None:
             st.pyplot(fig)
 
         col5, col6 = st.columns(2)
-        # Confusion Matrix XGB
         with col5:
             st.write("**Confusion Matrix: XGBoost**")
             fig, ax = plt.subplots()
             ConfusionMatrixDisplay.from_predictions(y_test, xgb.predict(X_test), ax=ax)
             st.pyplot(fig)
-        # ROC Curve XGB
         with col6:
             st.write("**ROC Curve: XGBoost**")
             fig, ax = plt.subplots()
             RocCurveDisplay.from_estimator(xgb, X_test, y_test, ax=ax)
             st.pyplot(fig)
 
-        # Feature Importance
+        # Feature Importances
         st.write("### Feature Importances")
         col7, col8 = st.columns(2)
         with col7:
@@ -140,10 +136,11 @@ if main_file is not None:
     # ------- TAB 2: BATCH FILE UPLOAD (PREDICTION) -----------
     with tab2:
         st.header("Batch File Prediction")
+        # Sample download
+        st.markdown("Need a template? [Download sample input CSV](sandbox:/sample_input.csv)")
         batch_file = st.file_uploader("Upload customer CSV for batch prediction", type=["csv"], key="batch")
         if batch_file is not None:
             test_df = pd.read_csv(batch_file)
-            # Preprocess input
             if 'SeriousDlqin2yrs' in test_df.columns:
                 test_df = test_df.drop(columns=['SeriousDlqin2yrs'])
             test_df['DebtToIncomeRatio'] = test_df['DebtRatio'] / (test_df['MonthlyIncome'] + 1)
@@ -170,5 +167,13 @@ if main_file is not None:
             test_df['XGB_HighRisk'].value_counts().plot(kind='bar', ax=ax, color=['green', 'red'])
             plt.title("High Risk Customers (XGBoost)")
             st.pyplot(fig)
+        # Optional: show template download button
+        sample_df = pd.DataFrame([{
+            'RevolvingUtilizationOfUnsecuredLines': 0.5, 'age': 35, 'NumberOfTime30-59DaysPastDueNotWorse': 0,
+            'DebtRatio': 5, 'MonthlyIncome': 5000, 'NumberOfOpenCreditLinesAndLoans': 2,
+            'NumberOfTimes90DaysLate': 0, 'NumberRealEstateLoansOrLines': 1,
+            'NumberOfTime60-89DaysPastDueNotWorse': 0, 'NumberOfDependents': 0
+        }])
+        st.download_button("Download Sample Input CSV", sample_df.to_csv(index=False), "sample_input.csv")
 else:
     st.info("**Please upload the main `cs-training.csv` dataset in the sidebar to use this app.**")
